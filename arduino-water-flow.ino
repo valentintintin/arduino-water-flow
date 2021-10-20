@@ -11,7 +11,8 @@
 
 #define LEDS 6
 #define NUM_LEDS 5
-#define LEDS_INTENSITY 25
+#define LEDS_INTENSITY 30
+#define LEDS_INTENSITY_OVERFLOW_LITER 100
 
 #define LED 9
 
@@ -21,13 +22,14 @@
 
 #define PULSE_FOR_LITER 300
 #define TIME_BEFORE_SLEEP_MILLIS 300000 // 300s
-#define COLOR_MIN 13000 // green
-#define COLOR_MAX 65536 // red
+#define COLOR_MIN 15000 // green
+#define COLOR_MAX 65000 // red
 
 Adafruit_NeoPixel pixels(NUM_LEDS, LEDS, NEO_GRB + NEO_KHZ800);
 
 unsigned int pulseForLed = PULSE_FOR_LITER * NUM_LEDS;
 unsigned long lastTime = 0;
+bool hasOverflowLiter = false;
 
 volatile long timeBeforeSleep = TIME_BEFORE_SLEEP_MILLIS;
 volatile unsigned long pulseCount = 0;
@@ -61,6 +63,8 @@ void goToSleep() {
   sleep_disable();
   Serial.println(F("Wake up"));
   pulseCount = 0;
+  hasOverflowLiter = false;
+  pixels.setBrightness(LEDS_INTENSITY);
   blink();
 }
 
@@ -76,7 +80,19 @@ void show() {
   pixels.clear();
 
   if (pulseCount > 30) { // 100mL
-    for (byte i = 0; i <= pulseCount / pulseForLed; i++) {
+    byte nbLedsToUse = pulseCount / pulseForLed;
+
+    if (nbLedsToUse > NUM_LEDS) {
+      nbLedsToUse = NUM_LEDS;
+
+      if (!hasOverflowLiter) {
+        pulseCount = 0;
+        hasOverflowLiter = true;
+        pixels.setBrightness(LEDS_INTENSITY_OVERFLOW_LITER);
+      }
+    }
+    
+    for (byte i = 0; i <= nbLedsToUse; i++) {
       if (pulseCount / pulseForLed == i) {
         pixels.setPixelColor(i, getColorHsvFromPulses(pulseCount));
       } else {
@@ -141,8 +157,6 @@ void loop() {
     timeBeforeSleep = TIME_BEFORE_SLEEP_MILLIS;  
     pulseCount++;  
     digitalWrite(LED, LOW);
-
-    delay(50);
   #endif
   
   timeBeforeSleep -= millis() - lastTime;
@@ -154,5 +168,5 @@ void loop() {
   
   show();
   
-  delay(10);
+  delay(1);
 }
